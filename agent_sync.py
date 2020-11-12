@@ -77,7 +77,7 @@ class Agent(ComparableObject):
 
     def query(self, sender, term, context, hist=[]):
         extended_rules = self.create_extended_rules(context.focus_rules)
-        equivalent_term = self.look_for_similar_literal(term.literal, extended_rules)
+        equivalent_term = self.look_for_similar_term(term, extended_rules)
         if not equivalent_term:
             return Answer(term, context, None, "False", [], [])
         if equivalent_term in hist:
@@ -92,7 +92,7 @@ class Agent(ComparableObject):
         unblocked_q, supported_q, blocking_set_q, support_set_q = self.find_support(
             equivalent_term, extended_rules, context, hist_q
         )
-        if not unblocked_q:
+        if not unblocked_q:"False"
             return Answer(term, context, equivalent_term, "False", [], [])
 
         if - equivalent_term in hist:
@@ -125,9 +125,9 @@ class Agent(ComparableObject):
     def convert_term_to_local(self, term):
         return Term(self, term.literal)
 
-    def look_for_similar_literal(self, literal, rules):
+    def look_for_similar_term(self, term, rules):
         for rule in rules:
-            if rule.head == literal:
+            if self.similar_enough(rule.head, term):
                 return rule.head
         return False
 
@@ -156,6 +156,4 @@ class Agent(ComparableObject):
                 return False
 
 
-    def process_body_member(self, body_member, rule, context, hist_p):
-        pass
 
