@@ -16,20 +16,35 @@ def equal_dicts_except(dict1, dict2, except_=()):
     return all(dict1[field_name] == dict2[field_name] for field_name in dict1.keys() if field_name not in except_)
 
 
-class ComparableObject:
+class ComparableObjectOld:
     def __eq__(self, other):
         if type(other) is type(self):
             return equal_dicts_except(self.__dict__, other.__dict__, ("id",))
         return False
 
+
+class ComparableObject:
+
+    def _key(self):
+        return tuple([attr_value for attr_value in self.__dict__.values()])
+
+    def __hash__(self):
+        return hash(self._key())
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self._key() == other._key()
+        return NotImplemented
+
+
 class Literal(ComparableObject):
 
-    def __init__(self, symbol, negative=False):
+    def __init__(self, symbol, positive=True):
         self.symbol = symbol
-        self.negative = negative
+        self.positive = positive
 
     def __neg__(self):
-        return Literal(self.symbol, not self.negative)
+        return Literal(self.symbol, not self.positive)
 
 
 class Term(ComparableObject):
@@ -45,6 +60,9 @@ class Term(ComparableObject):
         if self.definer != "X":
             return False
         return any(term.original_literal == self.literal for term in list_)
+
+    def _key(self):
+        return self.definer, self.literal
 
 class InstantiatedTerm(Term):
 
@@ -64,6 +82,9 @@ class Rule(ComparableObject):
     def __str__(self):
         return self.head + " <-- " + self.body
 
+    def _key(self):
+        return self.head, tuple(self.body)
+
 
 class StaticRule(Rule):
     pass
@@ -76,6 +97,9 @@ class QueryContext(ComparableObject):
         self.term = term
         self.agent = agent
         self.focus_knowledge = focus_knowledge
+
+    def _key(self):
+        return self.id
 
 
 class MultiAgentSystem(ComparableObject):
@@ -162,6 +186,7 @@ class Agent(ComparableObject):
         self.rules = []
         self.preference_function = dict()
         self.query_memory = dict()
+        self.known_agents = self.system.agents.values()
 
     def initialize_query(self, term, focus_knowledge):
         context = self.system.new_query_context(term, self, focus_knowledge)
@@ -169,7 +194,7 @@ class Agent(ComparableObject):
 
     def query(self, sender: "Agent", term: Term, context: QueryContext, hist: List[InstantiatedTerm] = []):
 
-        extended_rules = self.create_extended_rules(context.focus_rules)
+        extended_rules = self.create_extended_rules(context.focus_knowledge)
         equivalent_term = self.look_for_similar_term(term, extended_rules)
 
         if equivalent_term is None:
@@ -179,7 +204,7 @@ class Agent(ComparableObject):
         if self.local_ans(- equivalent_term, extended_rules):
             return Answer(term, context, equivalent_term, TruthValue.FALSE, None)
 
-        if equivalent_term.has_instantiated_term_in(hist):
+        if equivalent_term in hist:
             # return Answer(term, context, equivalent_term, TruthValue.UNDEFINED, arg_tree_promise_for(equivalent_term))
             _, _, arg_tree_q = self.query_agents([equivalent_term.definer], equivalent_term, context, hist)
             ## a ideia aqui é que se já estava no historico, então o agente em questão já possui em sua query_memory
@@ -214,12 +239,15 @@ class Agent(ComparableObject):
         else:
             return Answer(term, context, equivalent_term, TruthValue.UNDEFINED, arg_tree_q)
 
-    def create_extended_rules(self, focus_rules) -> List[Rule]:
-        converted_focus_rules = [self.convert_focus_rule_to_local(rule) for rule in focus_rules]
-        return set(self.rules) + set(converted_focus_rules)
+    def create_extended_rules(self, focus_knowledge) -> List[Rule]:
+        converted_focus_knowledge = [self.convert_focus_rule_to_local(rule) for rule in focus_knowledge]
+        return set(self.rules).union(set(converted_focus_knowledge))
 
     def convert_focus_rule_to_local(self, rule: Rule) -> Rule:
-        return Rule(self.convert_term_to_local(rule.head), [self.convert_term_to_local(term) for term in rule.body])
+        return Rule(
+            rule.id + "_" + self.id,
+            self.convert_term_to_local(rule.head),
+            [self.convert_term_to_local(term) for term in rule.body])
 
     def convert_term_to_local(self, term: Term) -> Term:
         return Term(self, term.literal)
@@ -228,7 +256,7 @@ class Agent(ComparableObject):
         for rule in rules:
             sim_degree = self.similarity(rule.head, term)
             if self.similar_enough(sim_degree):
-                return InstantiatedTerm(rule.head.definer, rule.head.literal, sim_degree)
+                return InstantiatedTerm(rule.head.definer, rule.head.literal, term.literal, sim_degree)
         return None
 
     def similar_enough(self, sim_degree):
@@ -359,4 +387,7 @@ class Agent(ComparableObject):
 
     def calculate_term_rank(self, term: InstantiatedTerm):
         return self.preference_function(term.definer) * term.sim_degree
+
+    def _key(self):
+        return self.id
 

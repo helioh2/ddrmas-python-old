@@ -26,6 +26,7 @@ class Builder:
         return Term(definer, literal)
 
     def build_literal(self, string_literal):
-        negative = string_literal[0] == "¬"
-        symbol = string_literal[1:] if negative else string_literal
-        return Literal(symbol, negative)
+        positive = string_literal[0] != "¬"
+        symbol = string_literal if positive else string_literal[1:]
+        return Literal(symbol, positive)
+

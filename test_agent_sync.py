@@ -5,14 +5,14 @@ from mushroom_rules_examples import R_MUSHROOM, R_FOCUS_MUSHROOM
 
 def create_scenario_mushroom_hunters():
 
-    def similarity_function(term1, term2):
-        if "amanita_velosa" in (term1, term2) and "springtime_amanita" in (term1, term2):
+    def similarity_function(term1: Term, term2: Term):
+        if "avl(m1)" in (term1.literal, term2.literal) and "spa(m1)" in (term1.literal, term2.literal):
             return 0.8
-        if "amanita" in (term1, term2) and "springtime_amanita" in (term1, term2):
+        if "am(m1)" in (term1.literal, term2.literal) and "spa(m1)" in (term1.literal, term2.literal):
             return 0.5
-        if "amanita" in (term1, term2) and "amanita_velosa" in (term1, term2):
+        if "am(m1)" in (term1.literal, term2.literal) and "avl(m1)" in (term1.literal, term2.literal):
             return 0.5
-        return term1.literal == term2.literal
+        return 1 if term1.literal == term2.literal else 0
 
     system = MultiAgentSystem(similarity_function, 0.4)
 
